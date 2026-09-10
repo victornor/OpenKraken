@@ -111,6 +111,10 @@ def test_config_roundtrip() -> None:
     assert cfg2.lcd.brightness == cfg.lcd.brightness, "lcd.brightness mismatch"
     assert cfg2.lcd.orientation == cfg.lcd.orientation, "lcd.orientation mismatch"
     assert cfg2.lcd.sensor_style == cfg.lcd.sensor_style, "lcd.sensor_style mismatch"
+    gif_cfg = AppConfig.from_dict({"lcd": {"mode": "sensors_gif", "gif_path": "/tmp/x.gif"}})
+    assert gif_cfg.lcd.mode == "sensors_gif", "lcd.mode sensors_gif did not round-trip"
+    key_cfg = AppConfig.from_dict({"giphy_api_key": "from-json"})
+    assert key_cfg.giphy_api_key == "from-json", "giphy_api_key did not round-trip"
 
     # --- Lighting config round-trip (INTERFACES-LIGHTING.md) -----------------
     assert cfg2.lighting.enabled == cfg.lighting.enabled, "lighting.enabled mismatch"

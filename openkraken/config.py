@@ -123,7 +123,7 @@ class ChannelConfig:
 class LcdConfig:
     """Configuration for the round 640x640 LCD."""
 
-    mode: str = "liquid"  # "liquid" | "sensors" | "static" | "gif" | "off"
+    mode: str = "liquid"  # "liquid" | "sensors" | "sensors_gif" | "static" | "gif" | "off"
     brightness: int = 50  # 0-100
     orientation: int = 0  # 0 | 90 | 180 | 270
     image_path: str = ""  # last chosen static image (absolute path)
@@ -335,6 +335,9 @@ class AppConfig:
     #: Quietly check GitHub for a newer version on launch (only surfaces a notice
     #: in Settings when an update is actually available).
     check_updates_on_start: bool = True
+    #: User-supplied GIPHY API key for the LCD GIF browser. Empty by default.
+    #: Never logged. ``GIPHY_API_KEY`` in the environment overrides this.
+    giphy_api_key: str = ""
     pump: ChannelConfig = field(
         default_factory=lambda: ChannelConfig(
             mode="curve",
@@ -446,6 +449,7 @@ class AppConfig:
             "lcd_selfheal_boot_phase_s": float(self.lcd_selfheal_boot_phase_s),
             "lighting_fps": float(self.lighting_fps),
             "check_updates_on_start": bool(self.check_updates_on_start),
+            "giphy_api_key": self.giphy_api_key,
             "pump": self.pump.to_dict(),
             "fan": self.fan.to_dict(),
             "lcd": self.lcd.to_dict(),
@@ -513,6 +517,7 @@ class AppConfig:
             check_updates_on_start=_as_bool(
                 d.get("check_updates_on_start"), defaults.check_updates_on_start
             ),
+            giphy_api_key=_as_str(d.get("giphy_api_key"), defaults.giphy_api_key),
             pump=pump,
             fan=fan,
             lcd=lcd,

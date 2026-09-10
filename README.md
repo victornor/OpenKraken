@@ -63,6 +63,8 @@ sensors** style (`triple`) with [custom vendor logos](#features) in place; the
   - Live **sensor screens** rendered on the host and uploaded over USB
     (multiple styles), with a configurable liquid-ring colour and
     auto-detected CPU/GPU **vendor badges** (AMD / Intel / NVIDIA)
+  - **Sensors over GIF** — the same sensor overlay on an animated GIF
+    background (local file or GIPHY), played by the firmware
   - **Static images** and **animated GIFs**
   - Brightness, orientation (0/90/180/270°), and a software "off"
   - Self-healing: a wedged panel (a firmware quirk this device has) is detected
@@ -366,6 +368,21 @@ Each rendered frame is a full-resolution bitmap uploaded over USB — roughly
 the **sensor screen defaults to a 2-second** refresh interval (configurable
 0.5–10 s on the LCD page). Animated GIFs are limited by the firmware to an
 encoded size of about **24 MB**.
+
+**How does Sensors over GIF work?**
+The GIF is cropped to 640×640 and capped at 24 frames when you pick it. OpenKraken
+bakes the current sensor overlay (dark circular scrim + drop shadow) into those
+frames and uploads one GIF for the firmware to loop at the GIF's own frame delays
+(typically 10–15 fps). Numbers update when integer °C / load % change, not faster
+than the Refresh interval (default 2 s). USB is idle between replacements; each
+refresh is one burst, targeted at **≤ 4 MB** (firmware hard cap **24 MB**). The
+six-bucket sensor-frame ring is not used for this mode.
+
+**How do I use GIPHY for an LCD background?**
+Enter your own GIPHY API key in **Settings** (get one at
+https://developers.giphy.com/). The key is stored in
+`~/.config/openkraken/config.json` on this machine only. For development,
+`GIPHY_API_KEY` in the environment overrides it. OpenKraken never ships a key.
 
 **Do my fan/pump curves survive closing the app — or a reboot?**
 **Liquid-temp curves** are written into the cooler's firmware as a 40-point

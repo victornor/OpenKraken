@@ -30,11 +30,13 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Deque
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from openkraken.backend import curves
+from openkraken.backend import lcd_gif
 from openkraken.backend import lcd_render
 from openkraken.backend import lighting_fx
 from openkraken.backend.device import DeviceStatus, KrakenDevice
@@ -339,6 +341,11 @@ class ControlEngine(QThread):
         # Latest brightness / orientation we successfully pushed, for change detection.
         self._applied_brightness: int | None = None
         self._applied_orientation: int | None = None
+        # sensors_gif: last uploaded displayed-int key, bake worker, missing-file flag.
+        self._gif_last_key: tuple | None = None
+        self._gif_bake_lock = threading.Lock()
+        self._gif_bake_busy = False
+        self._gif_missing_notified = False
 
         # Most recent sample, used to seed software-curve duty from the *actual*
         # current source temperature when a cpu/gpu curve is applied.
@@ -487,6 +494,7 @@ class ControlEngine(QThread):
                 self._tick_deferred_lcd()
                 self._tick_lcd_selfheal()
                 self._tick_lcd_sensors(status, snap)
+                self._tick_lcd_sensors_gif(status, snap)
 
                 # 5. Stream an animated lighting frame if due (~1 FPS ceiling).
                 self._tick_lighting()
@@ -832,6 +840,97 @@ class ControlEngine(QThread):
         # The LCD upload disturbs the LED ring; repaint it (no-op if lighting off).
         self._repaint_lighting()
 
+    def _tick_lcd_sensors_gif(self, status: DeviceStatus, snap: SystemSnapshot) -> None:
+        """Bake a sensor overlay into the GIF cache and upload when readings change."""
+        if self._lcd_apply_pending_until is not None:
+            return
+        if self._lcd_cfg.mode != "sensors_gif":
+            return
+        if getattr(self._device, "lcd_bulk_unavailable", False):
+            if not self._lcd_bulk_notified:
+                self._lcd_bulk_notified = True
+                _LOGGER.warning(
+                    "LCD image uploads unavailable; sensors-over-GIF disabled"
+                )
+                self.error.emit(
+                    "LCD unavailable: the cooler's USB bulk interface is busy or "
+                    "inaccessible, so image/sensor screens can't be uploaded. "
+                    "Cooling and lighting still work."
+                )
+            return
+        self._lcd_bulk_notified = False
+        now = time.monotonic()
+        if now - self._last_lcd_push < self._lcd_cfg.sensor_interval:
+            return
+        gif_path = self._lcd_cfg.gif_path
+        if not gif_path or not Path(gif_path).is_file():
+            if not self._gif_missing_notified:
+                self._gif_missing_notified = True
+                self.error.emit("LCD: background GIF file is missing")
+            return
+        self._gif_missing_notified = False
+        if not self._device.is_connected:
+            return
+        data = lcd_render.LcdData(
+            liquid_temp=status.liquid_temp,
+            cpu_temp=snap.cpu_temp,
+            cpu_load=snap.cpu_load,
+            gpu_temp=snap.gpu_temp,
+            gpu_load=snap.gpu_load,
+            pump_rpm=status.pump_rpm,
+            fan_rpm=status.fan_rpm,
+            cpu_vendor=self._sensors.cpu_vendor,
+            gpu_vendor=self._sensors.gpu_vendor,
+            ring_color=tuple(self._lcd_cfg.ring_color),
+        )
+        key = lcd_gif.displayed_key(data)
+        if key == self._gif_last_key:
+            return
+        with self._gif_bake_lock:
+            if self._gif_bake_busy:
+                return
+            self._gif_bake_busy = True
+        self._last_lcd_push = now
+        threading.Thread(
+            target=self._bake_sensors_gif_worker,
+            args=(gif_path, self._lcd_cfg.sensor_style, data, key),
+            daemon=True,
+            name="openkraken-gif-bake",
+        ).start()
+
+    def _bake_sensors_gif_worker(
+        self,
+        source: str,
+        style: str,
+        data: lcd_render.LcdData,
+        key: tuple,
+    ) -> None:
+        """Off-engine-thread composite + encode; queues the upload."""
+        try:
+            cache = lcd_gif.prepare(source)
+            baked = lcd_gif.bake(cache, style, data)
+            self._requests.put(lambda: self._do_upload_sensors_gif(baked, key))
+        except Exception as exc:
+            _LOGGER.exception("sensors_gif bake failed")
+            message = str(exc) or "bake failed"
+            self._requests.put(lambda: self.error.emit(f"LCD: could not build sensor GIF ({message})"))
+        finally:
+            with self._gif_bake_lock:
+                self._gif_bake_busy = False
+
+    def _do_upload_sensors_gif(self, path: str, key: tuple) -> None:
+        """Engine-thread GIF upload for sensors_gif. Holds last animation on failure."""
+        if self._lcd_cfg.mode != "sensors_gif":
+            return
+        if not self._device.is_connected:
+            return
+        ok = self._device.set_lcd_gif(path)
+        if ok:
+            self._gif_last_key = key
+            self._repaint_lighting()
+        else:
+            _LOGGER.debug("sensors_gif upload held previous animation")
+
     # ------------------------------------------------------------------ #
     # Loop step 5: RGB lighting frame streaming.
     # ------------------------------------------------------------------ #
@@ -1069,9 +1168,12 @@ class ControlEngine(QThread):
             return
 
         # Reset the sensor push timer so a fresh frame is pushed promptly when we
-        # (re)enter sensors mode.
-        if cfg.mode == "sensors":
+        # (re)enter sensors / sensors_gif mode.
+        if cfg.mode in ("sensors", "sensors_gif"):
             self._last_lcd_push = 0.0
+        if cfg.mode == "sensors_gif":
+            self._gif_last_key = None
+            self._gif_missing_notified = False
 
         # ---- brightness handling, including the "off" emulation ----
         if cfg.mode == "off":
@@ -1126,6 +1228,14 @@ class ControlEngine(QThread):
             self._emit_apply_result(
                 "lcd", f"sensor screen ({cfg.sensor_style})", True
             )
+        elif cfg.mode == "sensors_gif":
+            if cfg.gif_path:
+                self._emit_apply_result(
+                    "lcd", f"sensors over GIF ({cfg.sensor_style})", True
+                )
+            else:
+                _LOGGER.warning("LCD sensors_gif mode requested without a gif path")
+                self.error.emit("LCD: no GIF selected")
         else:
             _LOGGER.warning("unknown LCD mode %r (was %r)", cfg.mode, previous_mode)
 

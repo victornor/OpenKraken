@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -182,6 +183,19 @@ class SettingsPage(QWidget):
         self._apply_start = QCheckBox("Apply saved settings on start")
         form.addRow("", self._apply_start)
 
+        self._giphy_key = QLineEdit()
+        self._giphy_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._giphy_key.setPlaceholderText("GIPHY API key")
+        form.addRow("GIPHY API key", self._giphy_key)
+        giphy_hint = QLabel(
+            "Required to search GIPHY from the LCD page. Get a key at "
+            "https://developers.giphy.com/ — stored only in this machine's "
+            "config. GIPHY_API_KEY in the environment overrides it."
+        )
+        giphy_hint.setWordWrap(True)
+        giphy_hint.setProperty("hint", True)
+        form.addRow("", giphy_hint)
+
         return box
 
     def _build_device_box(self) -> QWidget:
@@ -328,6 +342,7 @@ class SettingsPage(QWidget):
         self._close_tray.setChecked(bool(cfg.close_to_tray))
         self._run_background.setChecked(bool(cfg.run_in_background))
         self._apply_start.setChecked(bool(cfg.apply_on_start))
+        self._giphy_key.setText(getattr(cfg, "giphy_api_key", "") or "")
 
     def _refresh_device_info(self) -> None:
         device = getattr(self._engine, "device", None)
@@ -373,6 +388,7 @@ class SettingsPage(QWidget):
         cfg.run_in_background = bool(self._run_background.isChecked())
         cfg.apply_on_start = bool(self._apply_start.isChecked())
         cfg.check_updates_on_start = bool(self._auto_update.isChecked())
+        cfg.giphy_api_key = self._giphy_key.text().strip()
 
         try:
             cfg.save()
