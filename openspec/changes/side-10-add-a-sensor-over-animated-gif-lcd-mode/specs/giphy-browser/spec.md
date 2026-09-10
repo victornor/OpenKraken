@@ -41,7 +41,7 @@ Searching, scrolling the preview grid, and decoding preview images MUST NOT free
 Missing API key, no network, HTTP 429 rate limiting, and a successful search with zero results MUST each show a distinct, human-readable message in the browser. None of those cases MAY fail silently or hang.
 
 #### Scenario: No API key
-- **WHEN** the GIPHY API key environment variable is unset or empty
+- **WHEN** no GIPHY API key is configured in Settings and the environment variable is unset or empty
 - **THEN** the browser explains that a key is required and does not send a request
 
 #### Scenario: No network
@@ -68,11 +68,23 @@ The application MUST NOT call GIPHY at startup, while merely rendering the LCD, 
 - **THEN** it reads only local files and does not contact GIPHY
 
 ### Requirement: API key is not embedded or logged
-The GIPHY API key MUST come from the environment variable `GIPHY_API_KEY`. It is absent-by-default. It MUST NOT be hardcoded, written to config, committed, or printed in logs or the UI.
+The GIPHY API key MUST be user-configurable in Settings and persisted under `~/.config/openkraken` using the existing config conventions. The environment variable `GIPHY_API_KEY` MUST override the stored value when set (development). The key is absent-by-default. It MUST NOT be hardcoded, committed to the repository, shipped as a default, or printed in logs or the UI. The missing-key message MUST say where to obtain a key and that it is entered in Settings.
 
-#### Scenario: Key stays out of config and logs
+#### Scenario: Settings is the primary source
+- **WHEN** the user saves a GIPHY API key in Settings and the environment variable is unset
+- **THEN** the browser uses that stored key for requests
+
+#### Scenario: Environment variable overrides
+- **WHEN** `GIPHY_API_KEY` is set in the environment
+- **THEN** that value is used even if Settings also has a key
+
+#### Scenario: Key stays out of logs and the repo
 - **WHEN** a GIPHY request is made
-- **THEN** the key is read from the environment and does not appear in log lines, config JSON, or on-screen copy
+- **THEN** the key does not appear in log lines or on-screen copy, and no default key is shipped
+
+#### Scenario: No API key explains where to enter one
+- **WHEN** neither Settings nor the environment provides a key
+- **THEN** the browser explains that a key is required, where to get one, and that it is entered in Settings, and does not send a request
 
 ### Requirement: GIPHY attribution
 The GIPHY browser MUST display GIPHY attribution required of API consumers (a visible "Powered by GIPHY" mark on the browser).

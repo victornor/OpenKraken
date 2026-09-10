@@ -32,7 +32,8 @@ OpenKraken's LCD modes are a split: sensor screens are live data on a plain grou
 - `openkraken/backend/engine.py` — `sensors_gif` tick: bake overlay, `set_lcd_gif`, value-change gating.
 - `openkraken/backend/device.py` — reuse `set_lcd_gif` / `_set_screen` recovery; do not route this mode through `set_lcd_sensor_frame`.
 - `openkraken/gui/pages/lcd.py` — new mode radio, GIPHY + local picker, preview of overlay on the GIF.
-- New modules: GIPHY client (stdlib `urllib`, key from `GIPHY_API_KEY`), background-frame cache under `~/.config/openkraken/media/`.
+- Settings: a GIPHY API key field persisted in `~/.config/openkraken/config.json` (primary). Env `GIPHY_API_KEY` overrides for development. Never commit, log, or ship a default key.
+- New modules: GIPHY client (stdlib `urllib`), background-frame cache under `~/.config/openkraken/media/`.
 - Tests (no device): compositing, config round-trip, GIPHY client error mapping, engine upload on a faked driver. Existing `tests/test_lcd_bucket_ring.py` must still pass.
 - README FAQ: document the stated animation fps, data refresh, and USB numbers.
 - No new runtime dependencies. GIPHY key is an env var, never committed or logged.
