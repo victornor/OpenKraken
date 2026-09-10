@@ -244,6 +244,17 @@ class LcdBucketRingTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(driver.screen_calls, 1, "a validation error must fail at once")
 
+    def test_gif_recoverable_rejection_keeps_connection(self):
+        """A swallowed GIF content error must not disconnect."""
+        dev, driver = self._connected_device()
+        driver.screen_error = AssertionError("Max file size after resize is 24MB")
+
+        ok = dev.set_lcd_gif("huge.gif")
+
+        self.assertFalse(ok)
+        self.assertTrue(dev.is_connected)
+        self.assertEqual(driver.screen_calls, 1)
+
     def test_set_screen_does_not_flush_for_a_content_error(self):
         """An oversized GIF or missing file is not a stream problem."""
         dev, driver = self._connected_device()

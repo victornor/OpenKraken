@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QSize, Qt, QTimer
@@ -46,8 +47,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from openkraken.backend import lcd_render
+from openkraken.backend import lcd_gif, lcd_render
 from openkraken.config import LcdConfig
+from openkraken.gui.giphy_browser import GiphyBrowserDialog
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from openkraken.backend.device import DeviceStatus
@@ -61,6 +63,7 @@ _LOGGER = logging.getLogger(__name__)
 _MODES: list[tuple[str, str]] = [
     ("liquid", "Liquid temp (firmware)"),
     ("sensors", "Sensor screen (rendered)"),
+    ("sensors_gif", "Sensors over GIF"),
     ("static", "Static image"),
     ("gif", "Animated GIF"),
     ("off", "Screen off"),
@@ -269,6 +272,9 @@ class LcdPage(QWidget):
         self._pick_button = QPushButton("Choose file…")
         self._pick_button.clicked.connect(self._pick_file)
         pick_row.addWidget(self._pick_button)
+        self._giphy_button = QPushButton("Browse GIPHY…")
+        self._giphy_button.clicked.connect(self._browse_giphy)
+        pick_row.addWidget(self._giphy_button)
         pick_row.addStretch(1)
         fbox.addLayout(pick_row)
         self._path_label = QLabel("(none)")
@@ -379,8 +385,9 @@ class LcdPage(QWidget):
 
     def _sync_mode_widgets(self) -> None:
         mode = self._current_mode()
-        self._sensor_box.setVisible(mode == "sensors")
-        self._file_box.setVisible(mode in ("static", "gif"))
+        self._sensor_box.setVisible(mode in ("sensors", "sensors_gif"))
+        self._file_box.setVisible(mode in ("static", "gif", "sensors_gif"))
+        self._giphy_button.setVisible(mode in ("gif", "sensors_gif"))
         self._update_path_label()
         self._refresh_preview()
 
@@ -388,7 +395,7 @@ class LcdPage(QWidget):
         mode = self._current_mode()
         if mode == "static":
             path = self._lcd_cfg.image_path
-        elif mode == "gif":
+        elif mode in ("gif", "sensors_gif"):
             path = self._lcd_cfg.gif_path
         else:
             path = ""
@@ -429,7 +436,7 @@ class LcdPage(QWidget):
 
     def _pick_file(self) -> None:
         mode = self._current_mode()
-        if mode == "gif":
+        if mode in ("gif", "sensors_gif"):
             filt = _GIF_FILTER
             start = self._lcd_cfg.gif_path
         else:
@@ -440,10 +447,24 @@ class LcdPage(QWidget):
         )
         if not path:
             return
-        if mode == "gif":
-            self._lcd_cfg.gif_path = path
+        if mode in ("gif", "sensors_gif"):
+            self._set_gif_path(path)
         else:
             self._lcd_cfg.image_path = path
+            self._update_path_label()
+            self._refresh_preview()
+
+    def _browse_giphy(self) -> None:
+        dialog = GiphyBrowserDialog(self._config, self)
+        if dialog.exec() and dialog.chosen_path:
+            self._set_gif_path(dialog.chosen_path)
+
+    def _set_gif_path(self, path: str) -> None:
+        self._lcd_cfg.gif_path = path
+        try:
+            lcd_gif.prepare(path)
+        except lcd_gif.GifPrepareError:
+            _LOGGER.debug("GIF prepare failed for %s", path, exc_info=True)
         self._update_path_label()
         self._refresh_preview()
 
@@ -468,6 +489,8 @@ class LcdPage(QWidget):
         mode = self._current_mode()
         if mode == "sensors":
             self._render_sensor_preview()
+        elif mode == "sensors_gif":
+            self._render_sensors_gif_preview()
         elif mode == "static":
             self._render_file_preview(self._lcd_cfg.image_path)
         elif mode == "gif":
@@ -483,6 +506,38 @@ class LcdPage(QWidget):
             image = lcd_render.render(self._current_style(), data)
         except Exception:
             _LOGGER.exception("lcd_render.render failed")
+            self._preview.set_placeholder("render error")
+            return
+        pixmap = _pil_to_qpixmap(image)
+        if pixmap is None:
+            self._preview.set_placeholder("render error")
+        else:
+            self._preview.set_image(pixmap)
+
+    def _render_sensors_gif_preview(self) -> None:
+        path = self._lcd_cfg.gif_path
+        if not path:
+            self._preview.set_placeholder("No file selected")
+            return
+        if not Path(path).is_file():
+            self._preview.set_placeholder("Background file missing")
+            return
+        cache = lcd_gif.cache_dir_for(path)
+        frame = lcd_gif.first_cached_frame(cache)
+        if frame is None:
+            try:
+                cache = lcd_gif.prepare(path)
+                frame = lcd_gif.first_cached_frame(cache)
+            except lcd_gif.GifPrepareError:
+                self._preview.set_placeholder("Cannot preview")
+                return
+        if frame is None:
+            self._preview.set_placeholder("Cannot preview")
+            return
+        try:
+            image = lcd_render.render(self._current_style(), self._build_lcd_data(), background=frame)
+        except Exception:
+            _LOGGER.exception("sensors_gif preview render failed")
             self._preview.set_placeholder("render error")
             return
         pixmap = _pil_to_qpixmap(image)

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import math
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,6 +94,11 @@ _LIQUID_MIN = 20.0
 _LIQUID_MAX = 60.0
 
 _PLACEHOLDER = "--"
+_SCRIM_ALPHA = 128  # ~50% black circular scrim over a GIF background
+_SHADOW = (0, 0, 0)
+_active_background: ContextVar[Image.Image | None] = ContextVar(
+    "lcd_render_background", default=None
+)
 
 # Font candidate chain. DejaVu Sans Bold is the design font, but it is not
 # universally installed: Debian/Ubuntu ship it in fonts-dejavu-core (hence the
@@ -225,8 +231,10 @@ def _draw_text_anchored(
     fill: tuple[int, int, int],
     anchor: str = "mm",
 ) -> None:
-    """Draw *text* with a PIL anchor, tolerating fonts that lack anchor support."""
+    """Draw *text* with a PIL anchor, a 2 px drop shadow, and bitmap-font fallback."""
+    shadow_xy = (xy[0] + 2.0, xy[1] + 2.0)
     try:
+        draw.text(shadow_xy, text, font=font, fill=_SHADOW, anchor=anchor)
         draw.text(xy, text, font=font, fill=fill, anchor=anchor)
     except (ValueError, AttributeError):
         # Bitmap default font: emulate centre/middle anchoring manually.
@@ -240,6 +248,7 @@ def _draw_text_anchored(
             y -= h / 2.0
         elif len(anchor) > 1 and anchor[1] in ("s", "b"):
             y -= h
+        draw.text((x + 2.0, y + 2.0), text, font=font, fill=_SHADOW)
         draw.text((x, y), text, font=font, fill=fill)
 
 
@@ -266,7 +275,19 @@ def _fmt_rpm(value: int | None) -> str:
 
 def _new_canvas() -> tuple[Image.Image, ImageDraw.ImageDraw]:
     """Create a fresh background image and an anti-aliased draw context."""
-    img = Image.new("RGB", (CANVAS, CANVAS), _BG)
+    background = _active_background.get()
+    if background is None:
+        img = Image.new("RGB", (CANVAS, CANVAS), _BG)
+    else:
+        bg = background.convert("RGB")
+        if bg.size != (CANVAS, CANVAS):
+            bg = bg.resize((CANVAS, CANVAS), Image.Resampling.LANCZOS)
+        base = bg.convert("RGBA")
+        scrim = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 0))
+        ImageDraw.Draw(scrim).ellipse(
+            (0, 0, CANVAS - 1, CANVAS - 1), fill=(0, 0, 0, _SCRIM_ALPHA)
+        )
+        img = Image.alpha_composite(base, scrim).convert("RGB")
     draw = ImageDraw.Draw(img)
     return img, draw
 
@@ -748,17 +769,26 @@ _RENDERERS = {
 }
 
 
-def render(style: str, data: LcdData) -> Image.Image:
+def render(
+    style: str,
+    data: LcdData,
+    background: Image.Image | None = None,
+) -> Image.Image:
     """Render a 640x640 RGB sensor screen for the given *style*.
 
     Unknown styles fall back to ``"liquid_ring"`` (logged), so a stale config
-    value can never crash the engine's render loop.
+    value can never crash the engine's render loop. When *background* is set,
+    the style is drawn over that image with a circular scrim.
     """
     renderer = _RENDERERS.get(style)
     if renderer is None:
         _LOGGER.warning("unknown LCD style %r; falling back to 'liquid_ring'", style)
         renderer = _render_liquid_ring
-    return renderer(data)
+    token = _active_background.set(background)
+    try:
+        return renderer(data)
+    finally:
+        _active_background.reset(token)
 
 
 def render_to_file(
