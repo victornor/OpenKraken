@@ -52,7 +52,7 @@ Bake (composite + encode) runs on a worker thread so a multi-hundred-ms Pillow e
 
 **Choice.** Selected GIF is saved at `~/.config/openkraken/media/giphy/<id>.gif`, then runs the same selection pipeline. `LcdConfig.gif_path` points at that file (plain `gif` mode shares it). If the file is deleted: stay in mode, skip upload, UI shows missing-file; no silent re-fetch (that would be a network call outside the browser).
 
-API: stdlib `urllib` like `updater.py`. Key: `OPENKRAKEN_GIPHY_API_KEY`. Endpoints: `/v1/gifs/search`, `/trending`, `/categories`. Rating `pg-13`. Grid uses GIPHY preview/fixed-width URLs; selection prefers `downsized` then `original` GIF. Search debounced 300 ms. Preview cache: `media/giphy-preview/<id>.gif`. Qt work on a `QThread`; `QMovie` on the UI thread for grid playback. Dialog shows “Powered by GIPHY”. Never log the key.
+API: stdlib `urllib` like `updater.py`. Key: `GIPHY_API_KEY` (absent-by-default; missing key is a designed UI state, not a crash). Endpoints: `/v1/gifs/search`, `/trending`, `/categories`. Rating `pg-13`. Grid uses GIPHY preview/fixed-width URLs; selection prefers `downsized` then `original` GIF. Search debounced 300 ms. Preview cache: `media/giphy-preview/<id>.gif`. Qt work on a `QThread`; `QMovie` on the UI thread for grid playback. Dialog shows “Powered by GIPHY”. Never log the key.
 
 GIPHY browser is offered for both `sensors_gif` and `gif` because they already share `gif_path`.
 

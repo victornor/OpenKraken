@@ -17,7 +17,7 @@
 
 ## 4. GIPHY client
 
-- [ ] 4.1 Add a stdlib GIPHY client reading `OPENKRAKEN_GIPHY_API_KEY` (search, trending, categories, download to `media/giphy/<id>.gif`) and verify mocked HTTP covers success, empty list, 429, network error, and missing key with no request sent
+- [ ] 4.1 Add a stdlib GIPHY client reading `GIPHY_API_KEY` (search, trending, categories, download to `media/giphy/<id>.gif`) and verify mocked HTTP covers success, empty list, 429, network error, and missing key with no request sent
 - [ ] 4.2 Ensure the client never logs the key and is not imported from app startup or the engine render path; verify grep/tests that engine bake uses only local paths
 
 ## 5. GIPHY browser UI
@@ -28,5 +28,5 @@
 
 ## 6. Docs and offline suite
 
-- [ ] 6.1 Document the animation fps, data-refresh rule, USB burst, and `OPENKRAKEN_GIPHY_API_KEY` in the README FAQ and verify the numbers match design.md
+- [ ] 6.1 Document the animation fps, data-refresh rule, USB burst, and `GIPHY_API_KEY` in the README FAQ and verify the numbers match design.md
 - [ ] 6.2 Run `python3 -m unittest discover -s tests` and `QT_QPA_PLATFORM=offscreen python3 scripts/smoke_test.py` and verify both pass with no cooler attached, including existing `test_lcd_bucket_ring.py`

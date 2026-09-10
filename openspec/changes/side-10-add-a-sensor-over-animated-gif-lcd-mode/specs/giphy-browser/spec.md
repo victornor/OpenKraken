@@ -68,7 +68,7 @@ The application MUST NOT call GIPHY at startup, while merely rendering the LCD, 
 - **THEN** it reads only local files and does not contact GIPHY
 
 ### Requirement: API key is not embedded or logged
-The GIPHY API key MUST come from the environment variable `OPENKRAKEN_GIPHY_API_KEY`. It MUST NOT be hardcoded, written to config, committed, or printed in logs or the UI.
+The GIPHY API key MUST come from the environment variable `GIPHY_API_KEY`. It is absent-by-default. It MUST NOT be hardcoded, written to config, committed, or printed in logs or the UI.
 
 #### Scenario: Key stays out of config and logs
 - **WHEN** a GIPHY request is made
