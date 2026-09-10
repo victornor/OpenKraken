@@ -7,7 +7,7 @@ See proposal.md for motivation. Today's LCD split is host-rendered sensor PNGs a
 **Goals:**
 - One compositing path whose USB, fps, and bucket behaviour are stated and testable without hardware.
 - Prepare GIF frames once at selection; overlay every data refresh from that cache.
-- GIPHY confined to a Qt dialog; stdlib HTTP; key from env.
+- GIPHY confined to a Qt dialog; stdlib HTTP. The API key is entered in Settings and stored in `~/.config/openkraken/config.json`; `GIPHY_API_KEY` is a development override only.
 
 **Non-Goals:**
 - Firmware or liquidctl patches; MP4/WebP backgrounds; auto-contrast per frame; embedding or proxying a vendor key; running hardware watch scripts during apply.

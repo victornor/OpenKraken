@@ -36,4 +36,4 @@ OpenKraken's LCD modes are a split: sensor screens are live data on a plain grou
 - New modules: GIPHY client (stdlib `urllib`), background-frame cache under `~/.config/openkraken/media/`.
 - Tests (no device): compositing, config round-trip, GIPHY client error mapping, engine upload on a faked driver. Existing `tests/test_lcd_bucket_ring.py` must still pass.
 - README FAQ: document the stated animation fps, data refresh, and USB numbers.
-- No new runtime dependencies. GIPHY key is an env var, never committed or logged.
+- No new runtime dependencies. Never commit, log, or ship a default GIPHY key.
